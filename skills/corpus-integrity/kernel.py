@@ -238,3 +238,52 @@ def reproducibility_log(search_terms, databases, date_cutoff, counts):
     lines += ["", "**Counts:**"]
     lines += ["  - {}: {}".format(k, v) for k, v in counts.items()]
     return "\n".join(lines)
+
+
+def check_denominators(draft_path, source_csv_paths):
+    """Resolve every 'N of M' denominator in a draft against the row counts of the source tables.
+
+    Catches the failure where N and M come from different sets — e.g. "24 of 50", with the
+    numerator from a 46-row table and the denominator from a 50-study set. For each construction it
+    reports which source table(s) have exactly M rows, flags an M that matches no table, and flags an
+    impossible N > M. Reports candidates; does not gate — a legitimate M may be a subset defined in
+    prose rather than a whole table.
+    """
+    import re
+    import csv
+    draft = strip_refs(open(draft_path, encoding='utf-8', errors='ignore').read())
+    counts = {}
+    for p in source_csv_paths:
+        rows = list(csv.reader(open(p, newline='', encoding='utf-8', errors='ignore')))
+        counts[p.split("/")[-1]] = max(0, len(rows) - 1)  # minus header row
+    pat = re.compile(r'(\d[\d,]*)\s*(?:of|/|out of)\s*(?:the\s+)?(\d[\d,]*)', re.I)
+    out, seen = [], set()
+    for m in pat.finditer(draft):
+        n, big = norm_num(m.group(1)), norm_num(m.group(2))
+        if n is None or big is None or big < 2:
+            continue
+        if 1900 <= big <= 2100:          # a year, not a denominator
+            continue
+        key = (m.group(1), m.group(2))
+        if key in seen:
+            continue
+        seen.add(key)
+        matching = sorted(fn for fn, c in counts.items() if c == int(big))
+        near = ""
+        if not matching and counts:
+            fn_close = min(counts, key=lambda f: abs(counts[f] - int(big)))
+            c_close = counts[fn_close]
+            if c_close and abs(c_close - int(big)) / c_close <= 0.15:
+                near = " — CLOSE to {} ({} rows): possible denominator confusion".format(fn_close, c_close)
+        if n > big:
+            status = "impossible: N > M"
+        elif matching:
+            status = "M matches source table(s): " + ", ".join(matching)
+        else:
+            status = "M matches NO source table" + near
+        ctx = re.sub(r'\s+', ' ', draft[max(0, m.start() - 55):m.end() + 55]).strip()
+        out.append({"claim": "{} of {}".format(m.group(1), m.group(2)),
+                    "n": int(n), "m": int(big), "matching_tables": matching,
+                    "status": status, "context": ctx[:140],
+                    "source_table_rows": dict(counts)})
+    return out

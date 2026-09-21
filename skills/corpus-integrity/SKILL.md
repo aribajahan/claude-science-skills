@@ -51,6 +51,17 @@ by how many corpus papers reference each.
 - Pass **all** corpus DOIs (every table). Returns `{corpus_refs, cited_by_count, year, title, doi,
   openalex_id}`, ranked by `corpus_refs`. It ranks candidates; you decide which are in scope.
 
+### `check_denominators(draft_path, source_csv_paths) -> list[dict]`
+Resolves every `N of M` / `N/M` / `N out of M` construction in a draft against the row counts of the
+source tables. Catches the failure where numerator and denominator come from different sets (e.g.
+"24 of 50" with N from a 46-row table and M from a 50-study set).
+- Each result: `{claim, n, m, matching_tables, status, context, source_table_rows}`. `status` is one
+  of: matches a source table, `impossible: N > M`, or matches no table — with a **"CLOSE to <table>
+  (C rows): possible denominator confusion"** hint when M is within 15% of a real table count.
+- Reports candidates; does not gate. Many no-table hits are legitimate — within-study ratios
+  (`226/795` from a cited paper) or a subset defined in prose (a "64 studies" set that is no single
+  table). The `CLOSE` hint is the one to inspect first.
+
 ### `reproducibility_log(search_terms, databases, date_cutoff, counts) -> str`
 Formats a plain-text record of how the corpus was assembled, so its boundaries are explicit and
 someone could rebuild it.
