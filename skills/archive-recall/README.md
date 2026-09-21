@@ -19,6 +19,16 @@ prompts. Filtering rehydrated tool results and fold-carrier summaries brought it
 Without that filter, a transcript export would have presented 17 blocks of tool output and model
 summaries as things the user had written.
 
+## One honest limitation — and how the skill is shaped around it
+
+The accessor details it documents (`hits`, `text`, `idx`, `next`) are **platform internals, not a
+contract** — they can change between versions, and a skill that hard-asserts "the key is `hits`"
+goes silently wrong the day it isn't. So the skill leads with the durable *method* (empty is not
+absent; classify who really said what; a fold summary is a lead, not a quote) and keeps the exact
+shapes in one clearly-marked "verify — may change" block, each with a self-check that prints the
+keys actually returned. If a shape moves, the self-check surfaces it loudly instead of failing
+quiet. Treat the shapes as today's observation; trust the method.
+
 ## What it deliberately does not do
 
 **No `kernel.py`.** `host.archive` exists only in the `repl` tool; a sidecar loads into the
